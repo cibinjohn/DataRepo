@@ -9,6 +9,21 @@ import torch
 train_df = pd.read_csv("train.csv")
 test_df = pd.read_csv("test.csv")
 
+# --- Fix 1: ensure 'label' is numeric ---
+# If your labels are strings, convert to integers
+# Example: if labels are "positive"/"negative"
+if train_df["label"].dtype == "object":
+    label_mapping = {label: i for i, label in enumerate(sorted(train_df["label"].unique()))}
+    print("Label mapping:", label_mapping)
+    train_df["label"] = train_df["label"].map(label_mapping)
+    test_df["label"] = test_df["label"].map(label_mapping)
+
+# --- Fix 2: ensure correct dtypes ---
+train_df["label"] = train_df["label"].astype(int)
+test_df["label"] = test_df["label"].astype(int)
+
+
+
 # Assume your CSVs have 'text' and 'label' columns
 # If not, replace these with your actual column names
 train_dataset = Dataset.from_pandas(train_df)
