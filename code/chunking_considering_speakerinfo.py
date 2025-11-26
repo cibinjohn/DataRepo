@@ -1,3 +1,8 @@
+for chunks in chunked:
+  token_counts = [item['token_count'] for item in chunks]
+  print(sum(token_counts))
+
+-------
 import pandas as pd
 from transformers import DistilBertTokenizerFast
 
