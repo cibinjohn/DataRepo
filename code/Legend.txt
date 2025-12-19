@@ -1,0 +1,29 @@
+LEGEND_HTML = """
+<div style="
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+">
+  <strong>Legend:</strong>
+  <span style="
+        background-color: #d1e7dd;
+        border: 1px solid #0f5132;
+        border-radius: 4px;
+        padding: 2px 6px;
+        margin-left: 8px;
+  ">
+    Greeting
+  </span>
+  <span style="
+        background-color: #f8d7da;
+        border: 1px solid #842029;
+        border-radius: 4px;
+        padding: 2px 6px;
+        margin-left: 8px;
+  ">
+    Authentication
+  </span>
+</div>
+"""
