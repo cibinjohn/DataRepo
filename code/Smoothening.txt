@@ -1,7 +1,6 @@
 import pandas as pd
-from scipy import stats
 
-def smooth_predictions(df, window_size=3):
+def smooth_predictions(df, window_size=3, condition='any'):
     """
     Apply smoothing to NER predictions using a rolling window with mode.
     
@@ -12,6 +11,14 @@ def smooth_predictions(df, window_size=3):
     window_size : int
         Size of the window (must be odd for symmetric windows)
         Default is 3 (considers 1 preceding + current + 1 succeeding)
+    condition : str or callable
+        Condition that must be satisfied for smoothing to be applied:
+        - 'any': Always apply smoothing (default)
+        - 'all_different': Update only if all preceding and succeeding predictions 
+          in the window are different from the current prediction
+        - 'majority': Update only if the mode is different from current value and 
+          appears more than half the window
+        - callable: Custom function that takes (current_value, window) and returns bool
     
     Returns:
     --------
@@ -31,55 +38,51 @@ def smooth_predictions(df, window_size=3):
         
         # Get window of predictions
         window = df['prediction'].iloc[start:end]
+        current_value = df['prediction'].iloc[i]
+        
+        # Get neighbors (excluding current position)
+        neighbors = pd.concat([
+            df['prediction'].iloc[start:i],
+            df['prediction'].iloc[i+1:end]
+        ])
         
         # Calculate mode (most frequent value)
         mode_value = window.mode()
         
-        # If there's a mode, use it; otherwise keep original
-        if len(mode_value) > 0:
+        # Determine if we should apply smoothing based on condition
+        should_smooth = False
+        
+        if condition == 'any':
+            should_smooth = True
+        
+        elif condition == 'all_different':
+            # Check if all neighbors are different from current value
+            if len(neighbors) > 0:
+                should_smooth = all(neighbors != current_value)
+            else:
+                should_smooth = False
+        
+        elif condition == 'majority':
+            # Update only if mode is different and appears more than half the window
+            if len(mode_value) > 0:
+                mode_val = mode_value.iloc[0]
+                mode_count = (window == mode_val).sum()
+                should_smooth = (mode_val != current_value) and (mode_count > len(window) / 2)
+            else:
+                should_smooth = False
+        
+        elif callable(condition):
+            # Custom condition function
+            should_smooth = condition(current_value, window)
+        
+        else:
+            raise ValueError(f"Invalid condition: {condition}")
+        
+        # Apply smoothing if condition is met
+        if should_smooth and len(mode_value) > 0:
             smoothed.append(mode_value.iloc[0])
         else:
-            smoothed.append(df['prediction'].iloc[i])
-    
-    df_smoothed['smoothed_prediction'] = smoothed
-    
-    return df_smoothed
-
-
-# Alternative: Using custom before/after parameters
-def smooth_predictions_custom(df, before=1, after=1):
-    """
-    Apply smoothing with explicit control over preceding and succeeding context.
-    
-    Parameters:
-    -----------
-    df : pandas.DataFrame
-        DataFrame with 'token' and 'prediction' columns
-    before : int
-        Number of preceding tokens to consider
-    after : int
-        Number of succeeding tokens to consider
-    """
-    
-    df_smoothed = df.copy()
-    smoothed = []
-    
-    for i in range(len(df)):
-        # Define window boundaries
-        start = max(0, i - before)
-        end = min(len(df), i + after + 1)
-        
-        # Get window of predictions
-        window = df['prediction'].iloc[start:end]
-        
-        # Calculate mode
-        mode_value = window.mode()
-        
-        # Use mode if available, otherwise keep original
-        if len(mode_value) > 0:
-            smoothed.append(mode_value.iloc[0])
-        else:
-            smoothed.append(df['prediction'].iloc[i])
+            smoothed.append(current_value)
     
     df_smoothed['smoothed_prediction'] = smoothed
     
@@ -89,10 +92,19 @@ def smooth_predictions_custom(df, before=1, after=1):
 # Example usage:
 data = {
     'token': ['The', 'quick', 'brown', 'fox', 'jumps', 'over', 'the', 'dog'],
-    'prediction': ['O', 'B-ADJ', 'O', 'B-NOUN', 'B-NOUN', 'O', 'O', 'B-NOUN']
+    'prediction': ['O', 'B-ADJ', 'O', 'O', 'O', 'B-NOUN', 'O', 'B-NOUN']
 }
 df = pd.DataFrame(data)
 
-# Apply smoothing
-df_smoothed = smooth_predictions(df, window_size=3)
+# Apply smoothing with window of 7 and 'all_different' condition
+df_smoothed = smooth_predictions(df, window_size=7, condition='all_different')
 print(df_smoothed[['token', 'prediction', 'smoothed_prediction']])
+
+# Example with custom condition
+def custom_condition(current_value, window):
+    """Update only if current value appears less than 30% in the window"""
+    return (window == current_value).sum() / len(window) < 0.3
+
+df_custom = smooth_predictions(df, window_size=5, condition=custom_condition)
+print("\nCustom condition:")
+print(df_custom[['token', 'prediction', 'smoothed_prediction']])
