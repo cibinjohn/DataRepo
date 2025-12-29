@@ -1,0 +1,40 @@
+import pandas as pd
+from scipy import stats
+
+def smooth_predictions(df, window_size=3):
+    """
+    Apply smoothing to NER predictions using a rolling window with mode.
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        DataFrame with 'token' and 'prediction' columns
+    window_size : int
+        Size of the window (must be odd for symmetric windows)
+        Default is 3 (considers 1 preceding + current + 1 succeeding)
+    
+    Returns:
+    --------
+    pandas.DataFrame
+        DataFrame with original columns plus 'smoothed_prediction' column
+    """
+    
+    def get_mode(window):
+        """Calculate mode of the window, handling ties by keeping original value"""
+        mode_result = stats.mode(window, keepdims=True)
+        return mode_result.mode[0]
+    
+    # Create a copy to avoid modifying original
+    df_smoothed = df.copy()
+    
+    # Apply rolling window with center=True for symmetric windows
+    df_smoothed['smoothed_prediction'] = df['prediction'].rolling(
+        window=window_size, 
+        center=True, 
+        min_periods=1
+    ).apply(get_mode, raw=True)
+    
+    return df_smoothed
+
+# Example usage:
+# df_smoothed = smooth_predictions(df, window_size=3)
