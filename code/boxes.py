@@ -1,15 +1,14 @@
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 def create_metric_boxes(metrics_dict, width=600, height=300, box_colors=None):
     """
-    Create metric display boxes showing metric names and values.
+    Create metric display boxes showing metric names and values (numeric or string).
     
     Parameters:
     -----------
     metrics_dict : dict
-        Dictionary with metric names as keys and values as values
-        Example: {'Total Calls': 1250, 'Avg Duration': 45.3}
+        Dictionary with metric names as keys and values (numeric or string) as values
+        Example: {'Total Calls': 1250, 'Agent Name': 'cibin'}
     width : int, optional
         Figure width in pixels. Default is 600
     height : int, optional
@@ -29,37 +28,10 @@ def create_metric_boxes(metrics_dict, width=600, height=300, box_colors=None):
     if box_colors is None:
         box_colors = ['#3498db', '#e67e22', '#27ae60', '#9b59b6', '#e74c3c'][:num_metrics]
     
-    # Create subplots
-    fig = make_subplots(
-        rows=1, 
-        cols=num_metrics,
-        specs=[[{'type': 'indicator'}] * num_metrics],
-        horizontal_spacing=0.1
-    )
+    # Create empty figure
+    fig = go.Figure()
     
-    # Add each metric as an indicator
-    for i, (name, value) in enumerate(metrics_dict.items()):
-        fig.add_trace(
-            go.Indicator(
-                mode="number",
-                value=value,
-                title={'text': f"<b>{name}</b>", 'font': {'size': 18}},
-                number={'font': {'size': 40}, 'valueformat': '.2f' if isinstance(value, float) else 'd'},
-                domain={'x': [0, 1], 'y': [0, 1]}
-            ),
-            row=1, col=i+1
-        )
-    
-    # Update layout
-    fig.update_layout(
-        width=width,
-        height=height,
-        margin=dict(l=20, r=20, t=40, b=20),
-        paper_bgcolor='white',
-        plot_bgcolor='white'
-    )
-    
-    # Add colored backgrounds to each subplot
+    # Add shapes for boxes
     shapes = []
     for i in range(num_metrics):
         x_start = i / num_metrics
@@ -70,29 +42,79 @@ def create_metric_boxes(metrics_dict, width=600, height=300, box_colors=None):
                 xref="paper",
                 yref="paper",
                 x0=x_start + 0.01,
-                y0=0.05,
+                y0=0.1,
                 x1=x_end - 0.01,
-                y1=0.95,
+                y1=0.9,
                 fillcolor=box_colors[i],
-                opacity=0.2,
-                line=dict(color=box_colors[i], width=2),
-                layer="below"
+                opacity=0.15,
+                line=dict(color=box_colors[i], width=3)
             )
         )
     
-    fig.update_layout(shapes=shapes)
+    # Add annotations for metric names and values
+    annotations = []
+    for i, (name, value) in enumerate(metrics_dict.items()):
+        x_center = (i + 0.5) / num_metrics
+        
+        # Metric name (top)
+        annotations.append(
+            dict(
+                text=f"<b>{name}</b>",
+                x=x_center,
+                y=0.7,
+                xref="paper",
+                yref="paper",
+                font=dict(size=18, color='#2c3e50'),
+                showarrow=False
+            )
+        )
+        
+        # Metric value (bottom)
+        # Format value based on type
+        if isinstance(value, float):
+            display_value = f"{value:.2f}"
+        elif isinstance(value, int):
+            display_value = str(value)
+        else:
+            display_value = str(value)
+        
+        annotations.append(
+            dict(
+                text=f"<b>{display_value}</b>",
+                x=x_center,
+                y=0.35,
+                xref="paper",
+                yref="paper",
+                font=dict(size=40, color=box_colors[i]),
+                showarrow=False
+            )
+        )
+    
+    # Update layout
+    fig.update_layout(
+        shapes=shapes,
+        annotations=annotations,
+        width=width,
+        height=height,
+        margin=dict(l=20, r=20, t=20, b=20),
+        paper_bgcolor='white',
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
+        plot_bgcolor='white'
+    )
     
     return fig
 
 
 # Example usage:
-# metrics = {
-#     'Total Calls': 1250,
-#     'Avg Duration': 45.3
-# }
-# 
-# custom_colors = ['#4ECDC4', '#FF6B6B']
-# 
-# fig = create_metric_boxes(metrics, box_colors=custom_colors)
-# # For Databricks:
-# displayHTML(fig.to_html())
+metrics = {
+    'Total Calls': 1250,
+    'Agent Name': 'cibin',
+    'Avg Duration': 45.3
+}
+
+custom_colors = ['#4ECDC4', '#FF6B6B', '#9b59b6']
+
+fig = create_metric_boxes(metrics, box_colors=custom_colors)
+# For Databricks:
+fig.show()
