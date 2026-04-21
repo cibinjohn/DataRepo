@@ -1,0 +1,139 @@
+Here’s a clean, structured Confluence page draft for your AI Coding Agent project, aligned with the style of your sample onboarding agent page.
+
+⸻
+
+📄 AI Coding Agent
+
+⸻
+
+Summary
+
+Use Case Category: Developer Productivity / Automation
+Requester: Engineering Teams, Product Managers
+Access Required: GitHub, IDE integrations (VS Code, IntelliJ), Internal Repos, Documentation Systems
+
+⸻
+
+Problem Statement
+
+Developers and analysts spend significant time writing repetitive boilerplate code, configuring environments, and interpreting stakeholder requirements into technical implementations. This leads to:
+
+* Slower development cycles
+* Inconsistent code quality and structure
+* Increased dependency on senior developers
+* Inefficiencies in translating business needs into code
+
+⸻
+
+Current Workflow (Before Agent)
+
+* Developers manually interpret requirements from stakeholders
+* Repetitive boilerplate code is written from scratch
+* Configuration files are created manually
+* Developers search across documentation and past projects for references
+* Multiple iterations are required to align implementation with expectations
+
+⸻
+
+Target Users
+
+* Primary: Developers, Data Scientists, Data Engineers
+* Secondary: Product Managers, Analysts
+
+⸻
+
+Trigger & Entry Point
+
+* Trigger: User provides natural language requirement (e.g., feature request, API need, pipeline creation)
+* Entry Points:
+    * IDE plugins (VS Code, IntelliJ)
+    * Web interface / internal portal
+    * Integration with tools like Copilot, Cursor, Claude
+
+⸻
+
+Inputs & Data Sources
+
+* Internal code repositories (GitHub, GitLab)
+* Coding standards and best practices documentation
+* Existing project templates and boilerplates
+* API specifications and schema definitions
+* Stakeholder input (natural language prompts)
+
+⸻
+
+Agent Capabilities
+
+Capability	Yes/No	Description
+Generate Code	Yes	Generates functional code based on user requirements
+Create Config Files	Yes	Auto-generates environment and config files
+Suggest Improvements	Yes	Recommends optimizations and best practices
+Boilerplate Creation	Yes	Produces reusable templates for common tasks
+Debug Assistance	Yes	Identifies and suggests fixes for errors
+Execute Code	No	Does not run or deploy code directly
+
+⸻
+
+Outputs
+
+* Generated code snippets or full modules
+* Configuration files (YAML, JSON, etc.)
+* Boilerplate templates
+* Documentation for generated code
+* Suggested improvements and optimizations
+
+⸻
+
+Example Use Cases
+
+* Generate REST API endpoints from requirements
+* Create ETL/data pipelines from high-level descriptions
+* Build reusable microservice templates
+* Generate test cases and documentation
+* Convert business logic into executable code
+
+⸻
+
+Architecture Overview (Optional Section)
+
+* Frontend: IDE plugin / Web UI
+* Backend: LLM-based agent orchestration
+* Integrations:
+    * Code repositories
+    * Documentation systems
+    * CI/CD pipelines
+* Model Options: Claude, Copilot, Cursor, internal LLMs
+
+⸻
+
+Risks & Considerations
+
+* Risk of incorrect or inefficient code generation
+* Dependency on quality of input prompts
+* Security concerns with access to internal repositories
+* Need for human validation before production use
+* Version control and traceability of generated code
+
+⸻
+
+Success Metrics
+
+* Reduction in development time
+* Decrease in repetitive coding tasks
+* Adoption rate among developers
+* Code quality improvements (fewer bugs, better standards compliance)
+* Developer satisfaction
+
+⸻
+
+Future Enhancements
+
+* Code execution and testing integration
+* Automated deployment pipelines
+* Learning from internal codebase patterns
+* Personalized coding style adaptation
+* Integration with ticketing systems (Jira, etc.)
+
+⸻
+
+If you want, I can ￼ tailor this further to your bank POC context (Maple Bank) or make it more technical/architecture-heavy for leadership review.
