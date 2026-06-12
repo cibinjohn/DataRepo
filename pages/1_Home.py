@@ -3,7 +3,9 @@ import pandas as pd
 import plotly.express as px
 
 from utils.data_loader import load_data
-from utils.filters import TIME_RANGES
+from utils.filters import apply_date_filter
+
+
 st.set_page_config(page_title="Workspace", layout="wide")
 data = load_data()
 
@@ -20,17 +22,22 @@ st.title("🏠 Workspace Home")
 col1, col2, col3 = st.columns([2, 2, 1])
 
 with col3:
+    st.markdown("### Filters")
 
-    st.markdown("### ⚙️ Filters")
-
-    st.session_state.time_range = st.selectbox(
-        "Time Range",
-        list(TIME_RANGES.keys()),
-        index=list(TIME_RANGES.keys()).index(
-            st.session_state.get("time_range", "Last week")
-        ),
-        label_visibility="collapsed"
+    today = pd.Timestamp.today().normalize().date()
+    default_from, default_to = st.session_state.get(
+        "date_range", (today - pd.Timedelta(days=7), today)
     )
+
+    d1, d2 = st.columns(2)
+    from_date = d1.date_input("From", value=default_from)
+    to_date = d2.date_input("To", value=default_to)
+
+    if from_date > to_date:
+        st.warning("'From' date is after 'To' date — swapping them.")
+        from_date, to_date = to_date, from_date
+
+    st.session_state.date_range = (from_date, to_date)
 
     st.session_state.selected_dag = st.selectbox(
         "DAG",
@@ -38,17 +45,15 @@ with col3:
         index=0,
         label_visibility="collapsed"
     )
-
 ##################################################
 # APPLY FILTERS (LOCAL TO PAGE BUT GLOBAL STATE)
 ##################################################
 
 # TIME FILTER
-from utils.filters import apply_time_filter
 
-dag_runs = apply_time_filter(dag_runs)
-failed = apply_time_filter(failed)
-rca = apply_time_filter(rca, date_col="dag_run_date")
+dag_runs = apply_date_filter(dag_runs)
+failed = apply_date_filter(failed)
+rca = apply_date_filter(rca, date_col="dag_run_date")
 
 # DAG FILTER
 selected_dag = st.session_state.selected_dag
@@ -64,10 +69,50 @@ if selected_dag != "All":
 
 c1, c2, c3, c4 = st.columns(4)
 
-c1.metric("Distinct DAGs", dag_runs["dag_id"].nunique())
-c2.metric("Total DAG Runs", len(dag_runs))
-c3.metric("Failed Task Runs", len(failed))
-c4.metric("RCA Reports", len(rca))
+c1.markdown(
+    f"""
+    <div style="font-family: sans-serif;">
+        <p style="font-size: 18px; font-weight: bold; margin-bottom: 0px;">Distinct DAGs</p>
+        <p style="font-size: 32px; font-weight: 500; margin-top: 0px;">{dag_runs["dag_id"].nunique()}</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+c2.markdown(
+    f"""
+    <div style="font-family: sans-serif;">
+        <p style="font-size: 18px; font-weight: bold; margin-bottom: 0px;">Total DAG Runs</p>
+        <p style="font-size: 32px; font-weight: 500; margin-top: 0px;">{len(dag_runs)}</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+c3.markdown(
+    f"""
+    <div style="font-family: sans-serif;">
+        <p style="font-size: 18px; font-weight: bold; margin-bottom: 0px;">Failed Task Runs</p>
+        <p style="font-size: 32px; font-weight: 500; margin-top: 0px;">{len(failed)}</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+c4.markdown(
+    f"""
+    <div style="font-family: sans-serif;">
+        <p style="font-size: 18px; font-weight: bold; margin-bottom: 0px;">RCA Reports</p>
+        <p style="font-size: 32px; font-weight: 500; margin-top: 0px;">{len(rca)}</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# c1.metric("Distinct DAGs", dag_runs["dag_id"].nunique())
+# c2.metric("Total DAG Runs", len(dag_runs))
+# c3.metric("Failed Task Runs", len(failed))
+# c4.metric("RCA Reports", len(rca))
 
 st.divider()
 

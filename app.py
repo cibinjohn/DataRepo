@@ -1,5 +1,5 @@
 import streamlit as st
-from utils.filters import init_filters, TIME_RANGES
+from utils.filters import init_filters
 
 st.set_page_config(
     page_title="DataOps Assistant",
