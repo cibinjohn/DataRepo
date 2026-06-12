@@ -1,0 +1,146 @@
+CONCEPT B — Investigation Workspace
+
+An IDE/debugger for failures. Optimized for: deep debugging, log exploration, RCA validation. Primary persona: Data Engineer / Platform Engineer doing the actual fix.
+
+Mental model: Splunk search × Grafana Explore × VS Code. Three persistent panes; you drill in place instead of hopping pages.
+
+B1. Information Architecture
+
+DataOps Assistant — Workspace
+├── Workspace Home   (recent + pinned investigations, failure inbox)
+├── Failure Inbox    (list)
+├── Investigation Workspace   (3-pane, the core)
+│   ├── LEFT   task navigator + execution timeline
+│   ├── CENTER evidence tabs: Logs · Stack Trace · Signals · Diff
+│   └── RIGHT  RCA panel + validation controls
+├── RCA Report       (full-page reading / export view)
+└── Historical Explorer  (cohort comparison)
+
+B2. User Flow
+
+Failure Inbox ─► open in Workspace
+        │
+        ▼  LEFT: pick failed task + attempt
+  ┌─────────────────────────────────────────────┐
+  │ CENTER: read log ⇄ stack trace ⇄ signals ⇄  │  ← raw evidence, searchable
+  │         diff vs last good run                │
+  └─────────────────────────────────────────────┘
+        │  RIGHT: AI RCA claims, each with "jump to evidence"
+        ▼
+  Validate: ✓ confirm / ✎ edit / ✗ reject each finding (human-in-loop)
+        │
+        ▼
+  Finalize RCA Report ─► export   |   "compare cohort" ─► Historical Explorer
+
+B3. Wireframes
+
+B · Workspace Home
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ DataOps Workspace                                       🔍 search dag/task │
+├──────────────────────────────────────────────────────────────────────────┤
+│ FAILURE INBOX (unresolved)            │ PINNED / IN-PROGRESS               │
+│ 🔴 etl_orders.load_orders   12m  ●●●○ │ 📌 daily_revenue  you · 2 notes    │
+│ 🔴 ml_features.embed         4m  ⏳    │ 📌 dim_refresh    draft RCA        │
+│ 🟠 daily_revenue.agg         1h  ●●○○ │                                    │
+│ 🟡 dim_refresh.upsert        2h  ●○○○ │ RECENT (resolved) ▾                │
+├───────────────────────────────────────┴────────────────────────────────────┤
+│ FLEET MINI: fail rate ▁▂▅▇ · recurring 4 · retry-flaky 1 · RCA 10/12       │
+└──────────────────────────────────────────────────────────────────────────┘
+
+B · Failure Inbox (list)
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Failure Inbox   [status ▾][recurring ☑][has stack-trace ☑]   group by DAG │
+├──────────────────────────────────────────────────────────────────────────┤
+│ ▾ etl_orders        (3 failed tasks, 06-11 02:00)        recurring ×3 ↑    │
+│     load_orders   3 attempts  0% retry  signals: SENSOR_TIMEOUT  [open ▸]  │
+│     transform     1 attempt   —         downstream of load_orders [open ▸] │
+│ ▾ daily_revenue     (2 failed tasks)                      recurring ×5      │
+│     agg           2 attempts  33% retry error_code 137 (OOM)    [open ▸]   │
+└──────────────────────────────────────────────────────────────────────────┘
+
+B · Investigation Workspace — 3-pane (all required elements)
+
+┌── etl_orders · 06-11 02:00 ──────────────────────────── [Finalize RCA ⬇] ─┐
+├────────────┬─────────────────────────────────────────┬───────────────────┤
+│ NAVIGATOR  │ EVIDENCE  [Logs][Stack][Signals][Diff]   │ AI RCA · validate │
+│            │                                          │                   │
+│ Tasks ✗    │ ┌ Logs · load_orders · attempt 3 ──────┐ │ ●●●○ HIGH         │
+│ ▸load_ord. │ │ 02:00:01 INFO start sensor           │ │                   │
+│   a1 ✗     │ │ 02:30:01 ERROR Timeout 1800s waiting │◄│ Claim 1 ✓         │
+│   a2 ✗     │ │ 02:30:01 ERROR FileNotFound s3://…   │ │ S3 partition      │
+│   a3 ✗◄    │ │ 02:30:02 stack ↓ (see Stack tab)     │ │ missing           │
+│  transform │ │ 🔍 filter: ERROR  ⌄ 3 hits           │ │ [jump to L412]    │
+│  validate∅ │ └──────────────────────────────────────┘ │ [✓][✎][✗]         │
+│            │                                          │                   │
+│ TIMELINE   │ STACK TRACE                              │ Claim 2 ●●○○       │
+│ extract ✓  │  AirflowSensorTimeout                    │ sensor TO too low │
+│ load ✗✗✗   │   at S3KeySensor.poke()  sensors.py:88   │ [jump to Stack]   │
+│ trans. ✗   │   at TaskInstance.run()  taskinst.py:1402│ [✓][✎][✗]         │
+│ valid. ∅   │                                          │                   │
+│            │ ── DIFF vs last good (06-10) ──────────  │ SUGGESTED FIX     │
+│ [history▸] │  + sensor waited 1800s (was 120s)        │ 1 backfill part.  │
+│            │  + partition absent (was present)        │ 2 raise timeout   │
+│            │  retry: 0/3 (hist avg 0/3 → systemic)    │ 3 freshness SLA   │
+└────────────┴─────────────────────────────────────────┴───────────────────┘
+  CENTER tabs hold: full Logs, Stack Trace, Failure Signals, and a Diff that
+  also embeds the historical sparkline + retry-success readout (transient?).
+
+B · RCA Report (full-page, post-validation)
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ RCA · etl_orders · 06-11   validated by you · agent v2.3   ●●●○  [⬇][Share]│
+├──────────────────────────────────────────────────────────────────────────┤
+│ ✓ Root cause (confirmed)   Missing S3 partition + sensor timeout          │
+│ ✓ Evidence (linked)        log L412 · stack sensors.py:88 · diff vs 06-10 │
+│ ✎ Analyst note             "Upstream job X owns this partition — paged."   │
+│ ⚑ Classification           SYSTEMIC · recurring ×3                         │
+│ ▸ Remediation              backfill → raise TO → add freshness SLA         │
+│ Rejected claims (audit)    — none —                                        │
+└──────────────────────────────────────────────────────────────────────────┘
+
+B · Historical Explorer (cohort/diff focus)
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Historical Explorer   [DAG etl_orders ▾][task load_orders ▾][90d ▾] vs base│
+├──────────────────────────────────────────────────────────────────────────┤
+│ FAILURE RATE (selected vs fleet baseline)   FREQUENTLY FAILING TASKS       │
+│  %│  sel ▅▇█  base ▂▂▃                       load_orders ███ 23            │
+│   └──────────                                agg         ██  18            │
+│ RUN DURATION TREND          RETRY SUCCESS    upsert      ▆   9             │
+│  ▂▂▃▅ drift ↑               0/3 → systemic   RECENT FAILURES               │
+│                                              06-11 02:00 · 06-09 · 06-06   │
+└──────────────────────────────────────────────────────────────────────────┘
+
+B4. Screen layout logic
+
+Three resizable panes; left = what failed, center = the evidence, right = the claim. Critically, the AI sits on the right, subordinate to evidence in the center — the layout physically encodes "verify, then trust." Each AI claim links into the center pane (jump-to-line). Diff-vs-last-good is a first-class tab because "what changed?" is the debugger's first question.
+
+B5. Navigation
+
+Tab-within-pane (Logs/Stack/Signals/Diff) replaces page navigation for the core loop — you stay in the workspace. Top-level rail only for Home · Inbox · Historical. Resolved investigations become read-only RCA reports.
+
+B6. UX rationale
+
+Engineers fixing the actual bug live in logs and stack traces. Page-hopping breaks debugging flow, so the workspace keeps navigator + evidence + claim co-visible. The validation controls (✓/✎/✗ per claim) make the human the decision-maker and create an audit trail — essential for trusting LLM output and for post-incident review.
+
+B7. Streamlit components
+
+
+3-pane: st.columns([1,3,2]) inside st.container(border=True); persist pane state in st.session_state.
+Logs / stack: st.code(log, line_numbers=True, wrap_lines=True, height=…); for search/scroll use streamlit-ace or a custom search box filtering lines.
+Evidence tabs: st.tabs(["Logs","Stack","Signals","Diff"]).
+Timeline: Plotly Gantt (px.timeline) from start_time/end_time → st.plotly_chart.
+Per-claim validation: st.session_state + buttons / st.feedback; st.data_editor for editable claim list.
+Diff: render unified diff in st.code(language="diff").
+Jump-to-evidence: anchor via st.session_state + st.scroll_to pattern / highlight.
+Live status while RCA generates: st.status + st.write_stream.
+
+
+B8. Pros / Cons
+
+Pros: best-in-class for real debugging and RCA validation; evidence-first layout builds trust; audit trail; "what changed" front and center. Cons: denser, steeper learning curve; overkill for a quick triage glance; 3-pane is cramped on small screens; more custom components (ace, Plotly Gantt) = more build effort.
+
+
+

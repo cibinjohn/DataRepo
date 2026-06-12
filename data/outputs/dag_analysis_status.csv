@@ -1,0 +1,34 @@
+dag_id,dag_run_date,run_date,status
+customer_360_pipeline,2026-05-12,2026-05-13 00:00:00,Completed
+user_segmentation,2026-05-12,2026-05-13 01:00:00,Not Started
+inventory_sync,2026-05-13,2026-05-14 00:00:00,Completed
+revenue_reporting,2026-05-13,2026-05-14 04:00:00,Completed
+user_segmentation,2026-05-14,2026-05-15 03:00:00,Completed
+revenue_reporting,2026-05-15,2026-05-16 04:00:00,Not Started
+ml_feature_store,2026-05-20,2026-05-21 05:00:00,Completed
+inventory_sync,2026-05-21,2026-05-22 01:00:00,Completed
+ml_feature_store,2026-05-21,2026-05-22 06:00:00,Completed
+ml_feature_store,2026-05-22,2026-05-23 00:00:00,Not Started
+marketing_attribution,2026-05-23,2026-05-24 03:00:00,Completed
+customer_360_pipeline,2026-05-24,2026-05-25 01:00:00,Completed
+inventory_sync,2026-05-24,2026-05-25 04:00:00,Completed
+user_segmentation,2026-05-24,2026-05-25 05:00:00,Completed
+marketing_attribution,2026-05-25,2026-05-26 02:00:00,Not Started
+ml_feature_store,2026-05-25,2026-05-26 01:00:00,Completed
+clickstream_ingest,2026-05-26,2026-05-27 00:00:00,Completed
+revenue_reporting,2026-05-26,2026-05-27 06:00:00,Completed
+inventory_sync,2026-05-29,2026-05-30 02:00:00,Completed
+clickstream_ingest,2026-05-30,2026-05-31 05:00:00,Completed
+user_segmentation,2026-05-30,2026-05-31 04:00:00,Completed
+ml_feature_store,2026-05-31,2026-06-01 00:00:00,Completed
+user_segmentation,2026-05-31,2026-06-01 05:00:00,Completed
+customer_360_pipeline,2026-06-02,2026-06-03 00:00:00,Completed
+clickstream_ingest,2026-06-02,2026-06-03 00:00:00,Completed
+data_quality_checks,2026-06-03,2026-06-04 00:00:00,Completed
+inventory_sync,2026-06-04,2026-06-05 01:00:00,Completed
+ml_feature_store,2026-06-04,2026-06-05 05:00:00,Completed
+marketing_attribution,2026-06-05,2026-06-06 04:00:00,Completed
+customer_360_pipeline,2026-06-06,2026-06-07 02:00:00,Completed
+finance_reconciliation,2026-06-07,2026-06-08 03:00:00,Not Started
+customer_360_pipeline,2026-06-08,2026-06-09 00:00:00,Completed
+data_quality_checks,2026-06-10,2026-06-11 03:00:00,Not Started
