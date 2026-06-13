@@ -74,3 +74,28 @@ def get_latest_successful_run(
     return df.sort_values(
         "run_date"
     ).iloc[-1]
+
+
+# 1. Create a reusable function for the metric box
+def render_metric_box(column, title, value):
+    column.markdown(
+        f"""
+        <div style="
+            font-family: sans-serif;
+            background-color: #f8f9fa; /* Light grey background */
+            border: 1px solid #e0e0e0; /* Subtle border */
+            border-radius: 8px;        /* Rounded corners */
+            padding: 15px;             /* Space inside the box */
+            text-align: center;        /* Center align text horizontally */
+            box-shadow: 0px 2px 4px rgba(0,0,0,0.05); /* Slight shadow */
+        ">
+            <p style="font-size: 16px; font-weight: bold; margin: 0 0 8px 0; color: #555555;">
+                {title}
+            </p>
+            <p style="font-size: 32px; font-weight: 600; margin: 0; color: #111111;">
+                {value}
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
