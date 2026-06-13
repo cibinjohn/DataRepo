@@ -4,7 +4,7 @@ import plotly.express as px
 
 from utils.data_loader import load_data
 from utils.filters import apply_date_filter
-
+from utils.helpers import render_metric_box
 
 st.set_page_config(page_title="Workspace", layout="wide")
 data = load_data()
@@ -69,50 +69,13 @@ if selected_dag != "All":
 
 c1, c2, c3, c4 = st.columns(4)
 
-c1.markdown(
-    f"""
-    <div style="font-family: sans-serif;">
-        <p style="font-size: 18px; font-weight: bold; margin-bottom: 0px;">Distinct DAGs</p>
-        <p style="font-size: 32px; font-weight: 500; margin-top: 0px;">{dag_runs["dag_id"].nunique()}</p>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
 
-c2.markdown(
-    f"""
-    <div style="font-family: sans-serif;">
-        <p style="font-size: 18px; font-weight: bold; margin-bottom: 0px;">Total DAG Runs</p>
-        <p style="font-size: 32px; font-weight: 500; margin-top: 0px;">{len(dag_runs)}</p>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
 
-c3.markdown(
-    f"""
-    <div style="font-family: sans-serif;">
-        <p style="font-size: 18px; font-weight: bold; margin-bottom: 0px;">Failed Task Runs</p>
-        <p style="font-size: 32px; font-weight: 500; margin-top: 0px;">{len(failed)}</p>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-c4.markdown(
-    f"""
-    <div style="font-family: sans-serif;">
-        <p style="font-size: 18px; font-weight: bold; margin-bottom: 0px;">RCA Reports</p>
-        <p style="font-size: 32px; font-weight: 500; margin-top: 0px;">{len(rca)}</p>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-# c1.metric("Distinct DAGs", dag_runs["dag_id"].nunique())
-# c2.metric("Total DAG Runs", len(dag_runs))
-# c3.metric("Failed Task Runs", len(failed))
-# c4.metric("RCA Reports", len(rca))
+# 3. Render each metric box using the function
+render_metric_box(c1, "Distinct DAGs", dag_runs["dag_id"].nunique())
+render_metric_box(c2, "Total DAG Runs", len(dag_runs))
+render_metric_box(c3, "Failed Task Runs", len(failed))
+render_metric_box(c4, "RCA Reports", len(rca))
 
 st.divider()
 
