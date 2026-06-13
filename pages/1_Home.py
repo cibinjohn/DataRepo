@@ -13,13 +13,13 @@ dag_runs = data["dag_runs"]
 failed = data["failed_dag_runs"]
 rca = data["dataops_results"]
 
-st.title("🏠 Workspace Home")
+st.title("🏠 Home")
 
 ##################################################
 # TOP RIGHT FILTER BAR
 ##################################################
 
-col1, col2, col3 = st.columns([2, 2, 1])
+col1, col2, col3 = st.columns([2, 6, 2])
 
 with col3:
     st.markdown("### Filters")
@@ -45,6 +45,34 @@ with col3:
         index=0,
         label_visibility="collapsed"
     )
+#
+# # --- Selected DAG label on the left ---
+# with col1:
+#     st.markdown(f"### Selected DAG: `{st.session_state.selected_dag}`")
+# --- Utilize col1 to display the selected DAG info ---
+with col1:
+    # Safely get the selected DAG from session state, default to "All" if not set yet
+    current_dag = st.session_state.get("selected_dag", "All")
+
+    # Use your custom metric box helper or a clean markdown block
+    st.markdown(
+        f"""
+        <div style="
+            font-family: sans-serif;
+            background-color: #f1f3f5; 
+            border-left: 5px solid #007bff; /* Add an accent color strip */
+            border-radius: 6px;        
+            padding: 12px;             
+            margin-top: 10px;
+        ">
+            <p style="font-size: 20px; color: #666; margin: 0;">Selected DAG</p>
+            <p style="font-size: 22px; font-weight: bold; margin: 5px 0 0 0; color: #111;">🎯 {current_dag}</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
 ##################################################
 # APPLY FILTERS (LOCAL TO PAGE BUT GLOBAL STATE)
 ##################################################
@@ -111,13 +139,41 @@ c1, c2 = st.columns(2)
 with c1:
     st.subheader("Recent Failures")
     st.dataframe(
-        failed.sort_values("run_date", ascending=False).head(10),
+        failed[['dag_id', 'run_date', 'task_id', 'start_time', 'end_time']].sort_values("run_date", ascending=False).head(10),
+
         use_container_width=True
     )
+# print(dag_runs.columns)
+# with c2:
+#     st.subheader("Recent DAG Runs")
+#     st.dataframe(
+#         dag_runs.sort_values("run_date", ascending=False).head(10),
+#         use_container_width=True
+#     )
 
 with c2:
     st.subheader("Recent DAG Runs")
+
+    recent_runs = (
+        dag_runs.sort_values("run_date", ascending=False)
+        .head(10)
+        .copy()
+    )
+
+    recent_runs["Status"] = recent_runs["is_success"].map(
+        lambda x: "✅ Success" if x else "❌ Failed"
+    )
+
     st.dataframe(
-        dag_runs.sort_values("run_date", ascending=False).head(10),
-        use_container_width=True
+        recent_runs[
+            [
+                "dag_id",
+                "run_date",
+                "num_successful_tasks",
+                "num_failed_tasks",
+                "Status",
+            ]
+        ],
+        use_container_width=True,
+        hide_index=True,
     )
