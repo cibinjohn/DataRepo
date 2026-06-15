@@ -22,30 +22,30 @@ st.title("🏠 Home")
 
 col1, col2, col3 = st.columns([2, 6, 2])
 
-with col3:
-    st.markdown("### Filters")
-
-    today = pd.Timestamp.today().normalize().date()
-    default_from, default_to = st.session_state.get(
-        "date_range", (today - pd.Timedelta(days=7), today)
-    )
-
-    d1, d2 = st.columns(2)
-    from_date = d1.date_input("From", value=default_from)
-    to_date = d2.date_input("To", value=default_to)
-
-    if from_date > to_date:
-        st.warning("'From' date is after 'To' date — swapping them.")
-        from_date, to_date = to_date, from_date
-
-    st.session_state.date_range = (from_date, to_date)
-
-    st.session_state.selected_dag = st.selectbox(
-        "DAG",
-        ["All"] + sorted(dag_runs["dag_id"].unique()),
-        index=0,
-        label_visibility="collapsed"
-    )
+# with col3:
+#     st.markdown("### Filters")
+#
+#     today = pd.Timestamp.today().normalize().date()
+#     default_from, default_to = st.session_state.get(
+#         "date_range", (today - pd.Timedelta(days=7), today)
+#     )
+#
+#     d1, d2 = st.columns(2)
+#     from_date = d1.date_input("From", value=default_from)
+#     to_date = d2.date_input("To", value=default_to)
+#
+#     if from_date > to_date:
+#         st.warning("'From' date is after 'To' date — swapping them.")
+#         from_date, to_date = to_date, from_date
+#
+#     st.session_state.date_range = (from_date, to_date)
+#
+#     st.session_state.selected_dag = st.selectbox(
+#         "DAG",
+#         ["All"] + sorted(dag_runs["dag_id"].unique()),
+#         index=0,
+#         label_visibility="collapsed"
+#     )
 #
 # # --- Selected DAG label on the left ---
 # with col1:

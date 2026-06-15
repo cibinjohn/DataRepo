@@ -1,10 +1,38 @@
 import streamlit as st
+from utils.data_loader import load_data
+import pandas as pd
 
 st.set_page_config(
     page_title="DataOps Assistant",
     page_icon="🏠",
     layout="wide",
 )
+
+def render_global_filters():
+    data = load_data()
+    dag_options = ["All"] + sorted(data["dag_runs"]["dag_id"].unique())
+    today = pd.Timestamp.today().normalize().date()
+
+    with st.sidebar:
+        st.header("Filters")
+
+        default_from, default_to = st.session_state.get(
+            "date_range", (today - pd.Timedelta(days=7), today)
+        )
+        c1, c2 = st.columns(2)
+        from_date = c1.date_input("From", value=default_from)
+        to_date = c2.date_input("To", value=default_to)
+        if from_date > to_date:
+            from_date, to_date = to_date, from_date
+        st.session_state["date_range"] = (from_date, to_date)
+
+        current = st.session_state.get("selected_dag", "All")
+        st.session_state["selected_dag"] = st.selectbox(
+            "DAG", dag_options,
+            index=dag_options.index(current) if current in dag_options else 0,
+        )
+
+render_global_filters()
 
 st.markdown("""
 <style>

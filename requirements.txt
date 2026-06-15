@@ -12,3 +12,4 @@ streamlit-ace>=0.1.1
 networkx>=3.4
 
 pyarrow>=18.0.0
+streamlit-navigation-bar
