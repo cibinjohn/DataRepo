@@ -6,6 +6,7 @@ from utils.data_loader import load_data
 from utils.filters import apply_date_filter
 from utils.helpers import render_metric_box
 
+
 st.set_page_config(page_title="Workspace", layout="wide")
 data = load_data()
 

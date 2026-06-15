@@ -1,27 +1,41 @@
 import streamlit as st
-from utils.filters import init_filters
 
 st.set_page_config(
     page_title="DataOps Assistant",
-    page_icon="🔎",
-    layout="wide"
+    page_icon="🏠",
+    layout="wide",
 )
 
-init_filters()
-
-
-st.sidebar.divider()
-
-st.title("🔎 DataOps Assistant")
-
 st.markdown("""
-AI-powered DAG Failure Investigation Workspace
+<style>
+header[data-testid="stHeader"] a,
+header[data-testid="stHeader"] a span,
+header[data-testid="stHeader"] nav a,
+header[data-testid="stHeader"] nav span {
+    font-size: 1.15rem !important;
+    font-weight: 600 !important;
+}
+/* give the taller text room so it isn't clipped */
+header[data-testid="stHeader"] {
+    height: 4rem;
+}
+</style>
+""", unsafe_allow_html=True)
 
-Use the sidebar to navigate:
+# Inline pages for the ones without their own file yet
+def rca_reports():
+    st.title("RCA Reports")
 
-- Workspace Home
-- Failure Inbox
-- Investigation Workspace
-- RCA Report
-- Historical Explorer
-""")
+def historical_explorer():
+    st.title("Historical Explorer")
+
+pages = [
+    st.Page("pages/1_Home.py",                   title="Home",                icon="🏠", default=True),
+    st.Page("pages/2_Failure_Inbox.py",          title="Failure Inbox",       icon="📥"),
+    st.Page("pages/3_Investigation_Workspace.py", title="Investigation",      icon="🔍"),
+    st.Page(rca_reports,                          title="RCA Reports",         icon="📄"),
+    st.Page(historical_explorer,                  title="Historical Explorer", icon="📊"),
+]
+
+pg = st.navigation(pages, position="top")
+pg.run()
