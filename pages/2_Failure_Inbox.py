@@ -54,6 +54,6 @@ for _, row in runs.iterrows():
                 hide_index=True,
             )
         if st.button("Open Investigation", key=f"{row.dag_id}_{row.run_date}"):
-            st.session_state["selected_dag"] = row.dag_id
-            st.session_state["selected_run"] = row.run_date
+            st.session_state["investigation_dag"] = row.dag_id
+            st.session_state["investigation_run"] = row.run_date
             st.switch_page("pages/3_Investigation_Workspace.py")
