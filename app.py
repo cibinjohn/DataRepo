@@ -61,7 +61,7 @@ pages = [
     st.Page("pages/1_Home.py",                   title="Home",                icon="🏠", default=True),
     st.Page("pages/2_Failure_Inbox.py",          title="Failure Inbox",       icon="📥"),
     st.Page("pages/3_Investigation_Workspace.py", title="Investigation",      icon="🔍"),
-    st.Page(rca_reports,                          title="RCA Reports",         icon="📄"),
+    st.Page("pages/4_RCA_Report.py", title="RCA Reports", icon="📄"),
     st.Page(historical_explorer,                  title="Historical Explorer", icon="📊"),
 ]
 

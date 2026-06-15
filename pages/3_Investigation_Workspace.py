@@ -2,11 +2,17 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from utils.data_loader import load_data
+from utils.filters import apply_date_filter
+
 
 data = load_data()
 failed = data["failed_dag_runs"]
 task_runs = data["task_runs"]
 rca = data["dataops_results"]
+
+# failed = apply_date_filter(data["failed_dag_runs"])
+# task_runs = apply_date_filter(data["task_runs"])
+# rca = apply_date_filter(data["dataops_results"])
 
 st.title("🔍 Investigation Workspace")
 

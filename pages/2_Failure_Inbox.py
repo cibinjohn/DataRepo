@@ -7,6 +7,9 @@ data = load_data()
 failed = apply_date_filter(data["failed_dag_runs"])
 task_runs = data["task_runs"]
 
+rca = data["dataops_results"].copy()
+rca["dag_run_date"] = pd.to_datetime(rca["dag_run_date"])
+
 st.title("📥 Failure Inbox")
 
 selected_dag = st.session_state.get("selected_dag", "All")
@@ -49,11 +52,40 @@ for _, row in runs.iterrows():
 
     with st.expander(f"{row.dag_id} | {row.run_date}  —  {n_failed} failed"):
         st.dataframe(
-                status_df[["Task", "Status"]],
-                use_container_width=True,
-                hide_index=True,
-            )
-        if st.button("Open Investigation", key=f"{row.dag_id}_{row.run_date}"):
-            st.session_state["investigation_dag"] = row.dag_id
-            st.session_state["investigation_run"] = row.run_date
-            st.switch_page("pages/3_Investigation_Workspace.py")
+            status_df[["Task", "Status"]],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        has_rca = not rca[
+            (rca["dag_id"] == row.dag_id)
+            & (rca["dag_run_date"].dt.normalize() == pd.Timestamp(row.run_date).normalize())
+            ].empty
+
+        c1, c2, _ = st.columns([2, 2, 6])
+        with c1:
+            if st.button("Open Investigation", key=f"inv_{row.dag_id}_{row.run_date}"):
+                st.session_state["investigation_dag"] = row.dag_id
+                st.session_state["investigation_run"] = row.run_date
+                st.switch_page("pages/3_Investigation_Workspace.py")
+        with c2:
+            if st.button(
+                    "View RCA Report",
+                    key=f"rca_{row.dag_id}_{row.run_date}",
+                    disabled=not has_rca,
+                    help=None if has_rca else "No RCA report generated for this run yet",
+            ):
+                st.session_state["rca_dag"] = row.dag_id
+                st.session_state["rca_run"] = row.run_date
+                st.switch_page("pages/4_RCA_Report.py")
+
+    # with st.expander(f"{row.dag_id} | {row.run_date}  —  {n_failed} failed"):
+    #     st.dataframe(
+    #             status_df[["Task", "Status"]],
+    #             use_container_width=True,
+    #             hide_index=True,
+    #         )
+    #     if st.button("Open Investigation", key=f"{row.dag_id}_{row.run_date}"):
+    #         st.session_state["investigation_dag"] = row.dag_id
+    #         st.session_state["investigation_run"] = row.run_date
+    #         st.switch_page("pages/3_Investigation_Workspace.py")
