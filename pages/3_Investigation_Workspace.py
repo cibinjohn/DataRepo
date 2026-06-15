@@ -95,28 +95,33 @@ detail = failed[
 ]
 
 with center:
-    tabs = st.tabs(["Logs", "Stack Trace", "Signals", "Diff"])
+    tabs = st.tabs(["Log Summary", "Logs", "Stack Trace", "Signals", "Diff"])
 
     with tabs[0]:
+        if not detail.empty and pd.notna(detail["log_summary"].iloc[0]):
+            st.markdown(detail["log_summary"].iloc[0])
+        else:
+            st.success("No summary — this task did not fail.")
+    with tabs[1]:
         search = st.text_input("Search Logs")
         log = str(record.get("log", "") or "")
         if search:
             log = "\n".join(x for x in log.split("\n") if search.lower() in x.lower())
         st.code(log or "No log captured for this attempt.")
 
-    with tabs[1]:
+    with tabs[2]:
         if not detail.empty and pd.notna(detail["stack_trace"].iloc[0]):
             st.code(detail["stack_trace"].iloc[0])
         else:
             st.success("No stack trace — this task did not fail.")
 
-    with tabs[2]:
+    with tabs[3]:
         if not detail.empty and pd.notna(detail["failure_signals"].iloc[0]):
             st.json({"signals": detail["failure_signals"].iloc[0]})
         else:
             st.success("No failure signals — this task did not fail.")
 
-    with tabs[3]:
+    with tabs[4]:
         st.info("Comparing against the last successful run of this task")
         historical = task_runs[
             (task_runs["dag_id"] == dag_id)
