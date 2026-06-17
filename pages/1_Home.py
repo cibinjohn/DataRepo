@@ -83,25 +83,74 @@ st.divider()
 ##################################################
 # FAILURE TIMELINE
 ##################################################
+##################################################
+# FAILURES PER DAG  +  FAILURE TREND  (side by side)
+##################################################
+left_col, right_col = st.columns([1, 3])
 
-st.subheader("📉 Failure Trend")
+# ---- LEFT (25%): Failures per DAG ----
+with left_col:
+    st.subheader("📊 Failures per DAG")
 
-if not dag_runs.empty:
+    failed_runs = failed.drop_duplicates(subset=["dag_id", "run_date"])
+    if failed_runs.empty:
+        st.success("No failures in range.")
+    else:
+        fail_counts = (
+            failed_runs.groupby("dag_id")
+            .size()
+            .reset_index(name="failures")
+            .sort_values("failures", ascending=False)
+        )
+        max_f = fail_counts["failures"].max()
 
-    trend = (
-        dag_runs.groupby("run_date")
-        .agg(failed_tasks=("num_failed_tasks", "sum"))
-        .reset_index()
-    )
+        n = len(fail_counts)
+        rows_html = ""
+        for i, (_, r) in enumerate(fail_counts.iterrows(), start=1):
+            pct = max(16, round(r["failures"] / max_f * 100))  # floor so small bars stay visible
+            rows_html += (
+                f'<div class="fpd-row" style="position:relative;display:flex;align-items:center;'
+                f'gap:11px;padding:11px 14px;'
+                f'background:linear-gradient(to right,#e7f1fb {pct}%,#ffffff {pct}%);">'
+                f'<span style="display:flex;align-items:center;justify-content:center;width:20px;'
+                f'height:20px;border-radius:50%;background:#f1f3f5;color:#868e96;font-size:11px;'
+                f'font-weight:600;flex-shrink:0;">{i}</span>'
+                f'<span style="flex:1;font-size:14px;color:#212529;white-space:nowrap;'
+                f'overflow:hidden;text-overflow:ellipsis;">{r["dag_id"]}</span>'
+                f'<span style="font-size:14px;font-weight:700;color:#1971c2;flex-shrink:0;'
+                f'min-width:18px;text-align:right;">{r["failures"]}</span>'
+                f'</div>'
+            )
 
-    fig = px.line(
-        trend,
-        x="run_date",
-        y="failed_tasks",
-        title="Failure Trend Over Time"
-    )
+        st.markdown(
+            "<style>"
+            ".fpd-card{border:1px solid #ececec;border-radius:12px;overflow:hidden;"
+            "background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.05);font-family:sans-serif;}"
+            ".fpd-row+.fpd-row{border-top:1px solid #f1f3f5;}"
+            ".fpd-row:hover{filter:brightness(0.985);}"
+            "</style>"
+            f'<div class="fpd-card">{rows_html}</div>',
+            unsafe_allow_html=True,
+        )
 
-    st.plotly_chart(fig, use_container_width=True)
+# ---- RIGHT (75%): Failure Trend ----
+with right_col:
+    st.subheader("📉 Failure Trend")
+
+    if not dag_runs.empty:
+        trend = (
+            dag_runs.groupby("run_date")
+            .agg(failed_tasks=("num_failed_tasks", "sum"))
+            .reset_index()
+        )
+        fig_trend = px.line(
+            trend, x="run_date", y="failed_tasks", title="Failure Trend Over Time"
+        )
+        fig_trend.update_layout(height=360, margin=dict(l=10, r=10, t=40, b=10))
+        st.plotly_chart(fig_trend, use_container_width=True)
+
+st.divider()
+
 
 ##################################################
 # SUMMARY TABLES
