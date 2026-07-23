@@ -12,4 +12,7 @@ print(drive_id)
 
 folder_item = await client.drives.by_drive_id(drive_id).root.item_with_path(FOLDER_PATH).get()
 print(folder_item.id, folder_item.web_url)
-
+-----------------------
+import requests
+resp = requests.get("https://login.microsoftonline.com/nbcuni.onmicrosoft.com/v2.0/.well-known/openid-configuration")
+tenant_id = resp.json()["authorization_endpoint"].split("/")[3]
