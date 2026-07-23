@@ -1,0 +1,27 @@
+pip install Office365-REST-Python-Client
+
+import os
+from office365.runtime.auth.client_credential import ClientCredential
+from office365.sharepoint.client_context import ClientContext
+
+# Configuration
+SITE_URL = "https://yourtenant.sharepoint.com/sites/your-site-name"
+CLIENT_ID = "YOUR_CLIENT_ID"
+CLIENT_SECRET = "YOUR_CLIENT_SECRET"
+
+LOCAL_FILE_PATH = "sample.pdf"
+TARGET_FOLDER_URL = "/sites/your-site-name/Shared Documents/General"  # Relative server URL
+
+# Authenticate Context
+credentials = ClientCredential(CLIENT_ID, CLIENT_SECRET)
+ctx = ClientContext(SITE_URL).with_credentials(credentials)
+
+# Upload File
+file_name = os.path.basename(LOCAL_FILE_PATH)
+target_folder = ctx.web.get_folder_by_server_relative_url(TARGET_FOLDER_URL)
+
+with open(LOCAL_FILE_PATH, "rb") as content_file:
+    target_file = target_folder.upload_file(file_name, content_file.read())
+    ctx.execute_query()
+
+print(f"✅ Successfully uploaded {file_name} to {TARGET_FOLDER_URL}")
