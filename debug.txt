@@ -7,3 +7,14 @@ print(requests.get(f"{GRAPH}/sites/{site_id_parent}/sites", headers=H).json())
 
 # C. Independent route — search by name
 print(requests.get(f"{GRAPH}/sites?search=skoonie", headers=H).json())
+
+
+
+import base64, json
+payload = tok.split(".")[1]
+payload += "=" * (-len(payload) % 4)
+claims = json.loads(base64.urlsafe_b64decode(payload))
+print("roles:", claims.get("roles"))
+print("aud:  ", claims.get("aud"))
+print("tid:  ", claims.get("tid"))
+print("appid:", claims.get("appid"))
