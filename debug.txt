@@ -1,0 +1,9 @@
+# A. Does the PARENT site collection resolve?
+print(requests.get(f"{GRAPH}/sites/{HOSTNAME}:/sites/skoonie", headers=H).json())
+
+# B. If A works, is 'data' actually a subsite?
+site_id_parent = requests.get(f"{GRAPH}/sites/{HOSTNAME}:/sites/skoonie", headers=H).json()["id"]
+print(requests.get(f"{GRAPH}/sites/{site_id_parent}/sites", headers=H).json())
+
+# C. Independent route — search by name
+print(requests.get(f"{GRAPH}/sites?search=skoonie", headers=H).json())
