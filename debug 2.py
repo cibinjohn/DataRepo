@@ -16,3 +16,8 @@ print(folder_item.id, folder_item.web_url)
 import requests
 resp = requests.get("https://login.microsoftonline.com/nbcuni.onmicrosoft.com/v2.0/.well-known/openid-configuration")
 tenant_id = resp.json()["authorization_endpoint"].split("/")[3]
+
+-----------------------
+token = await credential.get_token("https://graph.microsoft.com/.default")
+print("Token acquired:", token.token[:20], "...")
+print("Expires on:", token.expires_on)
