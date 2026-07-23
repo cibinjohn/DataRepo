@@ -21,3 +21,13 @@ tenant_id = resp.json()["authorization_endpoint"].split("/")[3]
 token = await credential.get_token("https://graph.microsoft.com/.default")
 print("Token acquired:", token.token[:20], "...")
 print("Expires on:", token.expires_on)
+---------------------
+import requests
+
+headers = {"Authorization": f"Bearer {token.token}"}
+resp = requests.get(
+    "https://graph.microsoft.com/v1.0/sites/nbcuni.sharepoint.com:/sites/skoonie/data:",
+    headers=headers
+)
+print(resp.status_code)
+print(resp.json())
