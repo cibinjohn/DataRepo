@@ -1,22 +1,351 @@
-# A. Does the PARENT site collection resolve?
-print(requests.get(f"{GRAPH}/sites/{HOSTNAME}:/sites/skoonie", headers=H).json())
+# Databricks notebook source
+# =============================================================================
+# Databricks -> SharePoint upload via Microsoft Graph
+# STEP-BY-STEP DIAGNOSTIC VERSION
+# -----------------------------------------------------------------------------
+# Run each STEP in order. Each prints PASS / FAIL and, on failure, the exact
+# evidence to send the client. Do not proceed past a FAIL -- later steps depend
+# on earlier ones and will produce misleading errors.
+#
+# Reference docs are listed at the end of each step.
+# =============================================================================
 
-# B. If A works, is 'data' actually a subsite?
-site_id_parent = requests.get(f"{GRAPH}/sites/{HOSTNAME}:/sites/skoonie", headers=H).json()["id"]
-print(requests.get(f"{GRAPH}/sites/{site_id_parent}/sites", headers=H).json())
+# COMMAND ----------
+# =============================================================================
+# STEP 0 - CONFIGURATION
+# =============================================================================
+# Credentials: prefer a Databricks secret scope. Set USE_SECRETS = False only
+# for a one-off test, and never commit real values.
+USE_SECRETS = True
+SECRET_SCOPE = "sharepoint"
 
-# C. Independent route — search by name
-print(requests.get(f"{GRAPH}/sites?search=skoonie", headers=H).json())
+if USE_SECRETS:
+    TENANT_ID     = dbutils.secrets.get(SECRET_SCOPE, "tenant_id")      # noqa: F821
+    CLIENT_ID     = dbutils.secrets.get(SECRET_SCOPE, "client_id")      # noqa: F821
+    CLIENT_SECRET = dbutils.secrets.get(SECRET_SCOPE, "client_secret")  # noqa: F821
+else:
+    TENANT_ID     = "4f3526f9-97d6-412d-933a-4e30a73110f4"
+    CLIENT_ID     = "84324d06-b6d2-4a37-8ce1-de1ba800e9cf"
+    CLIENT_SECRET = "PASTE_FRESH_SECRET_HERE"
 
+# --- Target, decoded from the SharePoint URL ---------------------------------
+# URL: https://nbcuni.sharepoint.com/sites/skoonie/data/Shared%20Documents/
+#      Forms/AllItems.aspx?...&id=%2Fsites%2Fskoonie%2Fdata%2FShared%20Documents
+#      %2FAdvanced%20Analytics%2FMedia%20Analytics%2FWIP%2FMiguel%2F
+#      Databricks%20%2D%20Sharepoint%20Test
+HOSTNAME    = "nbcuni.sharepoint.com"
+SITE_PATH   = "sites/skoonie/data"     # note: 'data' is a sub-web under 'skoonie'
+LIBRARY     = "Documents"              # display name; verified in STEP 5
+DEST_FOLDER = "Advanced Analytics/Media Analytics/WIP/Miguel/Databricks - Sharepoint Test"
 
+LOCAL_FILE  = "/Volumes/my_catalog/my_schema/outputs/report.pdf"
 
-import base64, json
+GRAPH = "https://graph.microsoft.com/v1.0"
+SIMPLE_UPLOAD_MAX = 4 * 1024 * 1024     # 4 MiB
+CHUNK = 10 * 1024 * 1024                # 10 MiB = 32 x 320 KiB (valid multiple)
+
+import os, json, base64, requests
+
+def show(label, resp):
+    """Print status + body for any Graph response."""
+    print(f"  HTTP {resp.status_code}")
+    try:
+        print("  " + json.dumps(resp.json(), indent=2)[:1500])
+    except Exception:
+        print("  " + resp.text[:800])
+
+print("STEP 0 config loaded.")
+print(f"  tenant : {TENANT_ID}")
+print(f"  client : {CLIENT_ID}")
+print(f"  target : https://{HOSTNAME}/{SITE_PATH} -> {LIBRARY}/{DEST_FOLDER}")
+
+# COMMAND ----------
+# =============================================================================
+# STEP 1 - VERIFY THE TENANT EXISTS  (no credentials needed)
+# -----------------------------------------------------------------------------
+# Catches a wrong tenant ID (AADSTS90002) before you waste time on auth.
+# The OpenID discovery document is public.
+# Doc: https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols-oidc
+# =============================================================================
+r = requests.get(
+    f"https://login.microsoftonline.com/{TENANT_ID}/v2.0/.well-known/openid-configuration",
+    timeout=30,
+)
+if r.status_code == 200:
+    issuer = r.json()["issuer"]
+    print("PASS - tenant resolves")
+    print(f"  issuer: {issuer}")
+    assert TENANT_ID.lower() in issuer.lower(), "Tenant ID mismatch vs issuer!"
+else:
+    print("FAIL - tenant does not resolve. Wrong tenant ID, or a non-commercial cloud.")
+    show("discovery", r)
+    print("\n  EVIDENCE FOR CLIENT: tenant ID above is not recognised by "
+          "login.microsoftonline.com. Please confirm the Directory (tenant) ID "
+          "from Entra admin center -> Overview.")
+
+# COMMAND ----------
+# =============================================================================
+# STEP 2 - ACQUIRE A TOKEN  (OAuth2 client credentials / app-only)
+# Doc: https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-client-creds-grant-flow
+# =============================================================================
+r = requests.post(
+    f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token",
+    data={
+        "grant_type": "client_credentials",
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "scope": "https://graph.microsoft.com/.default",
+    },
+    timeout=30,
+)
+if r.status_code == 200:
+    tok = r.json()["access_token"]
+    H = {"Authorization": f"Bearer {tok}"}
+    print("PASS - token acquired")
+else:
+    tok, H = None, None
+    print("FAIL - token request rejected")
+    show("token", r)
+    print("\n  Common causes: AADSTS7000215 = wrong/expired client secret; "
+          "AADSTS700016 = app not found in this tenant; "
+          "AADSTS90002 = tenant not found.")
+
+# COMMAND ----------
+# =============================================================================
+# STEP 3 - INSPECT THE TOKEN  *** THE CRITICAL CHECK ***
+# -----------------------------------------------------------------------------
+# A token can be issued successfully and still carry NO permissions. The
+# 'roles' claim lists the admin-consented APPLICATION permissions. If it is
+# absent, every Graph data call will fail -- often with a vague
+# 'generalException' rather than a clear 403.
+# Docs:
+#   Permission types  : https://learn.microsoft.com/en-us/entra/identity-platform/permissions-consent-overview
+#   Access token claims: https://learn.microsoft.com/en-us/entra/identity-platform/access-token-claims-reference
+# =============================================================================
 payload = tok.split(".")[1]
 payload += "=" * (-len(payload) % 4)
 claims = json.loads(base64.urlsafe_b64decode(payload))
-print("roles:", claims.get("roles"))
-print("aud:  ", claims.get("aud"))
-print("tid:  ", claims.get("tid"))
-print("appid:", claims.get("appid"))
 
-https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-client-creds-grant-flow
+roles = claims.get("roles")
+print(f"  roles : {roles}")
+print(f"  aud   : {claims.get('aud')}")
+print(f"  tid   : {claims.get('tid')}")
+print(f"  appid : {claims.get('appid')}")
+
+if not roles:
+    print("\nFAIL - no application permissions consented.")
+    print("""
+  EVIDENCE FOR CLIENT
+  -------------------
+  App registration : {app}
+  Tenant           : {tid}
+  Finding          : the issued access token contains no 'roles' claim,
+                     meaning no Microsoft Graph APPLICATION permissions have
+                     been granted admin consent. All Graph calls therefore fail.
+
+  Required fix (Entra admin center -> App registrations -> this app -> API permissions):
+    1. Add Microsoft Graph -> APPLICATION permissions (not Delegated):
+         - Sites.ReadWrite.All      (upload to SharePoint)
+         - Files.ReadWrite.All      (only if OneDrive is also in scope)
+    2. Click "Grant admin consent for <tenant>".
+       The Status column must show a green check for each permission.
+       Adding a permission WITHOUT consent has no effect.
+
+  Note: Delegated permissions do not work with the client-credentials flow
+  (there is no signed-in user); a delegated grant also yields roles = None.
+
+  If policy requires least privilege via Sites.Selected, we additionally need a
+  per-site WRITE grant on https://{host}/{site}
+  (POST /sites/{{site-id}}/permissions with roles: ["write"]).
+""".format(app=claims.get("appid"), tid=claims.get("tid"),
+           host=HOSTNAME, site=SITE_PATH))
+elif claims.get("aud") != "https://graph.microsoft.com":
+    print("\nFAIL - token audience is not Microsoft Graph.")
+else:
+    print("\nPASS - token carries application permissions.")
+    needed = {"Sites.ReadWrite.All", "Sites.Selected"}
+    if not needed & set(roles):
+        print(f"  WARNING: none of {needed} present. Upload will fail with 403.")
+    if "Sites.Selected" in roles and "Sites.ReadWrite.All" not in roles:
+        print("  NOTE: Sites.Selected requires a per-site write grant to work.")
+
+# COMMAND ----------
+# =============================================================================
+# STEP 4 - BASELINE GRAPH CALL  (proves the token works at all)
+# -----------------------------------------------------------------------------
+# /organization needs only a minimal directory permission. If STEP 3 passed but
+# this fails, the problem is broader than SharePoint.
+# Doc: https://learn.microsoft.com/en-us/graph/api/organization-list
+# =============================================================================
+r = requests.get(f"{GRAPH}/organization", headers=H, timeout=30)
+print("PASS - Graph reachable with this token" if r.status_code == 200
+      else "INFO  - /organization not permitted (fine if Sites.* are granted)")
+show("organization", r)
+
+# COMMAND ----------
+# =============================================================================
+# STEP 5 - RESOLVE THE SITE
+# -----------------------------------------------------------------------------
+# Three independent routes. Any ONE succeeding is enough; running all three
+# distinguishes a path problem from a permission problem:
+#   - all three fail            -> permissions (see STEP 3)
+#   - 5A fails but 5B/5C works  -> path/sub-web addressing issue
+# Docs:
+#   Get site by path : https://learn.microsoft.com/en-us/graph/api/site-get
+#   Site ID format   : https://learn.microsoft.com/en-us/graph/api/resources/sharepoint
+#   List subsites    : https://learn.microsoft.com/en-us/graph/api/site-list-subsites
+#   Search sites     : https://learn.microsoft.com/en-us/graph/api/site-search
+# =============================================================================
+site_id = None
+
+# 5A - direct path addressing (hostname : /server-relative-path)
+print("5A  GET /sites/{hostname}:/{path}")
+r = requests.get(f"{GRAPH}/sites/{HOSTNAME}:/{SITE_PATH}", headers=H, timeout=30)
+show("5A", r)
+if r.status_code == 200:
+    site_id = r.json()["id"]
+    print(f"  PASS site_id = {site_id}")
+
+# 5B - parent site collection, then enumerate its sub-webs
+if not site_id:
+    print("\n5B  parent site collection -> subsites")
+    parent = SITE_PATH.rsplit("/", 1)[0]          # 'sites/skoonie'
+    leaf   = SITE_PATH.rsplit("/", 1)[-1]         # 'data'
+    rp = requests.get(f"{GRAPH}/sites/{HOSTNAME}:/{parent}", headers=H, timeout=30)
+    show("5B-parent", rp)
+    if rp.status_code == 200:
+        rs = requests.get(f"{GRAPH}/sites/{rp.json()['id']}/sites", headers=H, timeout=30)
+        show("5B-subsites", rs)
+        if rs.status_code == 200:
+            for s in rs.json().get("value", []):
+                if s.get("name", "").lower() == leaf.lower():
+                    site_id = s["id"]
+                    print(f"  PASS site_id = {site_id}")
+
+# 5C - search (does not use path addressing at all)
+if not site_id:
+    print("\n5C  GET /sites?search=...")
+    r = requests.get(f"{GRAPH}/sites?search=skoonie", headers=H, timeout=30)
+    show("5C", r)
+
+if not site_id:
+    print("\nFAIL - could not resolve the site by any route.")
+    print("  If STEP 3 showed roles = None, that is the cause; fix permissions first.")
+else:
+    print(f"\nSTEP 5 PASS - site_id = {site_id}")
+
+# COMMAND ----------
+# =============================================================================
+# STEP 6 - RESOLVE THE DOCUMENT LIBRARY (drive)
+# -----------------------------------------------------------------------------
+# A drive is a file container: a SharePoint document library, or a user's
+# OneDrive. Match on the display name -- note the URL segment
+# "Shared%20Documents" usually corresponds to the display name "Documents".
+# Doc: https://learn.microsoft.com/en-us/graph/api/drive-list
+# =============================================================================
+r = requests.get(f"{GRAPH}/sites/{site_id}/drives", headers=H, timeout=30)
+show("drives", r)
+drive_id = None
+if r.status_code == 200:
+    drives = r.json().get("value", [])
+    print("\n  Libraries on this site:")
+    for d in drives:
+        print(f"    - name={d['name']!r}  driveType={d.get('driveType')}")
+    match = [d for d in drives if d["name"] == LIBRARY]
+    if match:
+        drive_id = match[0]["id"]
+        print(f"\n  PASS drive_id = {drive_id}")
+    else:
+        print(f"\n  FAIL - no library named {LIBRARY!r}. "
+              f"Set LIBRARY to one of the names listed above and re-run.")
+
+# COMMAND ----------
+# =============================================================================
+# STEP 7 - VERIFY THE DESTINATION FOLDER EXISTS
+# -----------------------------------------------------------------------------
+# Confirms the decoded folder path is correct before uploading. Graph creates
+# missing parent folders on upload, so a 404 here is a warning, not a blocker --
+# but it usually means the path was mis-decoded.
+# Doc: https://learn.microsoft.com/en-us/graph/api/driveitem-get
+# =============================================================================
+r = requests.get(f"{GRAPH}/drives/{drive_id}/root:/{DEST_FOLDER}", headers=H, timeout=30)
+show("dest-folder", r)
+if r.status_code == 200:
+    print(f"  PASS folder exists: {r.json().get('webUrl')}")
+elif r.status_code == 404:
+    print("  WARN folder not found - it will be created on upload. "
+          "Double-check the decoded path if that is unexpected.")
+
+# COMMAND ----------
+# =============================================================================
+# STEP 8 - UPLOAD
+# -----------------------------------------------------------------------------
+# <= 4 MiB : single PUT to .../content
+#  > 4 MiB : resumable upload session, chunked PUTs to the returned uploadUrl.
+#            Non-final chunks MUST be a multiple of 320 KiB (327,680 bytes);
+#            10 MiB = 32 x 320 KiB. Intermediate chunks return 202; the final
+#            chunk returns 200/201 with the created driveItem.
+# Docs:
+#   Small files : https://learn.microsoft.com/en-us/graph/api/driveitem-put-content
+#   Large files : https://learn.microsoft.com/en-us/graph/api/driveitem-createuploadsession
+# =============================================================================
+CONFLICT = "replace"   # replace | rename | fail
+
+def upload(drive_id, dest_path, local_path):
+    size = os.path.getsize(local_path)
+    if size <= SIMPLE_UPLOAD_MAX:
+        url = (f"{GRAPH}/drives/{drive_id}/root:/{dest_path}:/content"
+               f"?@microsoft.graph.conflictBehavior={CONFLICT}")
+        with open(local_path, "rb") as f:
+            r = requests.put(url, headers={**H, "Content-Type": "application/octet-stream"},
+                             data=f.read(), timeout=300)
+        r.raise_for_status()
+        return r.json()
+
+    # large file: create session, then chunked PUTs
+    r = requests.post(
+        f"{GRAPH}/drives/{drive_id}/root:/{dest_path}:/createUploadSession",
+        headers=H, json={"item": {"@microsoft.graph.conflictBehavior": CONFLICT}},
+        timeout=30,
+    )
+    r.raise_for_status()
+    upload_url = r.json()["uploadUrl"]      # pre-authenticated: send no auth header
+    with open(local_path, "rb") as f:
+        start = 0
+        while start < size:
+            chunk = f.read(CHUNK)
+            end = start + len(chunk) - 1
+            rr = requests.put(
+                upload_url,
+                headers={"Content-Length": str(len(chunk)),
+                         "Content-Range": f"bytes {start}-{end}/{size}"},
+                data=chunk, timeout=600,
+            )
+            if rr.status_code in (200, 201):
+                return rr.json()
+            if rr.status_code != 202:
+                rr.raise_for_status()
+            start = end + 1
+    raise RuntimeError("upload ended without a 200/201 completion")
+
+
+assert os.path.exists(LOCAL_FILE), f"source file not found: {LOCAL_FILE}"
+dest_path = f"{DEST_FOLDER}/{os.path.basename(LOCAL_FILE)}"
+print(f"Uploading {LOCAL_FILE} ({os.path.getsize(LOCAL_FILE)/1e6:.2f} MB)")
+print(f"       -> {LIBRARY}/{dest_path}")
+item = upload(drive_id, dest_path, LOCAL_FILE)
+print("PASS - uploaded")
+print(f"  webUrl: {item.get('webUrl')}")
+
+# COMMAND ----------
+# =============================================================================
+# STEP 9 - CONFIRM
+# =============================================================================
+r = requests.get(f"{GRAPH}/drives/{drive_id}/root:/{dest_path}", headers=H, timeout=30)
+if r.status_code == 200:
+    d = r.json()
+    print(f"PASS - file present: {d['name']}  {d['size']} bytes  "
+          f"modified {d.get('lastModifiedDateTime')}")
+    print(f"  {d.get('webUrl')}")
+else:
+    show("verify", r)
