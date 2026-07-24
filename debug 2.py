@@ -47,3 +47,6 @@ payload = token.token.split(".")[1]
 padded = payload + "=" * (-len(payload) % 4)
 claims = json.loads(base64.urlsafe_b64decode(padded))
 print(claims.get("roles"))
+
+resp2 = requests.get("https://graph.microsoft.com/v1.0/sites/root", headers=headers, timeout=10)
+print(resp2.status_code, resp2.text[:300])
