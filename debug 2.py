@@ -39,3 +39,11 @@ try:
     print(resp.status_code, resp.text[:200])
 except Exception as e:
     print("Connection-level failure:", repr(e))
+------------------------
+
+import base64, json
+
+payload = token.token.split(".")[1]
+padded = payload + "=" * (-len(payload) % 4)
+claims = json.loads(base64.urlsafe_b64decode(padded))
+print(claims.get("roles"))
