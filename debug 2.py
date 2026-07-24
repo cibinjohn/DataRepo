@@ -31,3 +31,11 @@ resp = requests.get(
 )
 print(resp.status_code)
 print(resp.json())
+
+-------------------------
+import requests
+try:
+    resp = requests.get("https://graph.microsoft.com/v1.0/", headers=headers, timeout=10)
+    print(resp.status_code, resp.text[:200])
+except Exception as e:
+    print("Connection-level failure:", repr(e))
