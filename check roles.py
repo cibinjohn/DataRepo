@@ -1,3 +1,5 @@
+# https://learn.microsoft.com/en-us/answers/questions/5587705/application-permissions-roles-missing-from-access
+
 import msal
 import requests
 import jwt
