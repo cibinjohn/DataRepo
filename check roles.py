@@ -1,5 +1,5 @@
 # https://learn.microsoft.com/en-us/answers/questions/5587705/application-permissions-roles-missing-from-access
-
+# https://learn.microsoft.com/en-us/answers/questions/1643692/either-scp-or-roles-claim-need-to-be-present-in-th
 import msal
 import requests
 import jwt
