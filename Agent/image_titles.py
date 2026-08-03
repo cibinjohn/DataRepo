@@ -58,3 +58,44 @@ second_slide = presentation.slides[1]
 result = link_labels_to_images(second_slide)
 for r in result:
     print(r)
+
+########
+import matplotlib.pyplot as plt
+from PIL import Image
+import io
+
+def display_label_image_pairs(associations, slide):
+    # Build a lookup from shape_id -> shape for quick access
+    shape_lookup = {shape.shape_id: shape for shape in slide.shapes}
+
+    n = len(associations)
+    fig, axes = plt.subplots(1, n, figsize=(6 * n, 6))
+
+    if n == 1:
+        axes = [axes]  # keep iterable if only one pair
+
+    for ax, assoc in zip(axes, associations):
+        label = assoc["label_text"]
+        image_id = assoc["image_shape_id"]
+
+        if image_id is None:
+            ax.text(0.5, 0.5, f"No image matched\nfor '{label}'",
+                     ha="center", va="center")
+            ax.axis("off")
+            continue
+
+        shape = shape_lookup[image_id]
+        image_bytes = shape.image.blob
+        img = Image.open(io.BytesIO(image_bytes))
+
+        ax.imshow(img)
+        ax.set_title(label, fontsize=14, fontweight="bold")
+        ax.axis("off")
+
+    plt.tight_layout()
+    plt.show()
+
+# Usage
+second_slide = presentation.slides[1]
+result = link_labels_to_images(second_slide)
+display_label_image_pairs(result, second_slide)
