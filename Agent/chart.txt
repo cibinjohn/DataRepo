@@ -1,0 +1,97 @@
+Good question — this is a native PPT chart object (a `GraphicFrame` with an embedded chart), not a picture, so it needs different handling than what you've been doing for images. Here's both parts:
+
+## 1. Extracting the underlying data
+
+python-pptx has full read support for chart data via the `chart` API — you don't need OCR at all here, you can pull exact numbers:
+
+```python
+from pptx.enum.shapes import MSO_SHAPE_TYPE
+
+def extract_chart_data(slide):
+    chart_data_list = []
+
+    for shape in slide.shapes:
+        if not shape.has_chart:
+            continue
+
+        chart = shape.chart
+        chart_info = {
+            "shape_id": shape.shape_id,
+            "chart_type": str(chart.chart_type),
+            "categories": list(chart.plots[0].categories),
+            "series": []
+        }
+
+        for series in chart.plots[0].series:
+            chart_info["series"].append({
+                "name": series.name,
+                "values": list(series.values),
+            })
+
+        chart_data_list.append(chart_info)
+
+    return chart_data_list
+
+# Usage
+result = extract_chart_data(slide)
+for chart in result:
+    print(chart)
+```
+
+For your slide, this would give you something like:
+```python
+{
+  "categories": ["home", "search", "movies", "my_stuff_nav", "sports", "tv_shows"],
+  "series": [
+    {"name": "control", "values": [69.03, 4.06, 1.82, 1.57, 1.53, 0.63]},
+    {"name": "variation_1", "values": [69.19, 4.09, 1.80, 1.55, 1.53, 0.62]}
+  ]
+}
+```
+
+**One catch:** the `%` deltas (0.2%, 0.7%, -0.8%, -1.4%, 0.3%, -0.9%) sitting above each bar pair are almost certainly **separate text box shapes** manually placed on the slide, not part of the chart object itself — PowerPoint charts don't natively render custom "% change" annotations like that between series. You'll want to grab those the same way you handled "Control"/"Variant" labels earlier — loop over `shape.has_text_frame` shapes and geometrically match each label to the category it sits above (using `shape.left`/`shape.top` bounds), the same `link_labels_to_images`-style logic, just matched against chart plot-area x-positions instead of picture shapes this time.
+
+## 2. Saving the chart as an image
+
+This is trickier — python-pptx **cannot rasterize/render** a chart to an image; it only reads/writes the underlying XML data, there's no rendering engine built in. Your options:
+
+**Option A — Render the whole slide, then crop (most reliable in Databricks/Linux)**
+Use LibreOffice headless to convert the slide to an image, then crop to the chart's bounding box:
+```python
+import subprocess
+
+subprocess.run([
+    "libreoffice", "--headless", "--convert-to", "png",
+    "--outdir", "/tmp/slide_images", local_file_path
+])
+```
+This rasterizes the *whole slide* as PNG (LibreOffice typically only exports the first slide per file by default — you may need to split the deck to one-slide-per-file first, or use `--convert-to png:impress_png_Export` with page range options). Then crop using the chart shape's EMU bounding box converted to pixels based on the output image's DPI.
+
+**Option B — PowerPoint COM automation (Windows only, not viable in Databricks)**
+If you had a Windows machine with PowerPoint installed, `win32com` could screenshot a shape directly. Not usable in your Databricks/Linux environment, so skip this for your pipeline.
+
+**Option C — Reconstruct the chart yourself from extracted data (recommended for your pipeline)**
+Since you already have clean structured data from `extract_chart_data()` above, honestly the more robust move for your knowledge-assist pipeline is to **re-plot it yourself** with matplotlib rather than trying to rasterize PowerPoint's native rendering:
+```python
+import matplotlib.pyplot as plt
+
+def plot_chart_from_data(chart_info):
+    categories = chart_info["categories"]
+    fig, ax = plt.subplots(figsize=(10, 5))
+    width = 0.35
+    x = range(len(categories))
+
+    for i, series in enumerate(chart_info["series"]):
+        offset = [xi + i * width for xi in x]
+        ax.bar(offset, series["values"], width=width, label=series["name"])
+
+    ax.set_xticks([xi + width / 2 for xi in x])
+    ax.set_xticklabels(categories)
+    ax.legend()
+    plt.title("Watchtime by Page")
+    plt.show()
+
+plot_chart_from_data(result[0])
+```
+
+Given that your goal is feeding this into a knowledge-assist/RAG pipeline, I'd lean toward **Option C + the raw structured data** rather than chasing pixel-perfect image extraction — an LLM (or your downstream agent) will get far more value from `{"category": "home", "control": 69.03, "variation_1": 69.19, "delta_pct": 0.2}` as structured JSON than from an image it has to OCR/interpret again anyway.
