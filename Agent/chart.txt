@@ -1,97 +1,85 @@
-Good question — this is a native PPT chart object (a `GraphicFrame` with an embedded chart), not a picture, so it needs different handling than what you've been doing for images. Here's both parts:
+Yes — on Databricks, since there's no Windows/PowerPoint COM available, your practical path is: **LibreOffice headless → PDF → rasterize with PyMuPDF → crop to the chart's bounding box**. This is more reliable than the direct `--convert-to png` route (which is finicky with multi-slide decks), and it stays entirely within the Linux cluster.
 
-## 1. Extracting the underlying data
+### 1. Install LibreOffice on the cluster
 
-python-pptx has full read support for chart data via the `chart` API — you don't need OCR at all here, you can pull exact numbers:
+For a single session:
+```python
+%sh
+apt-get update -qq && apt-get install -y libreoffice-impress
+```
+For persistence across cluster restarts, put this in a **cluster-scoped init script** instead (Compute → your cluster → Advanced Options → Init Scripts) so you don't reinstall every time the cluster spins up.
+
+### 2. Convert the whole deck to PDF (once, not per-slide)
 
 ```python
-from pptx.enum.shapes import MSO_SHAPE_TYPE
-
-def extract_chart_data(slide):
-    chart_data_list = []
-
-    for shape in slide.shapes:
-        if not shape.has_chart:
-            continue
-
-        chart = shape.chart
-        chart_info = {
-            "shape_id": shape.shape_id,
-            "chart_type": str(chart.chart_type),
-            "categories": list(chart.plots[0].categories),
-            "series": []
-        }
-
-        for series in chart.plots[0].series:
-            chart_info["series"].append({
-                "name": series.name,
-                "values": list(series.values),
-            })
-
-        chart_data_list.append(chart_info)
-
-    return chart_data_list
-
-# Usage
-result = extract_chart_data(slide)
-for chart in result:
-    print(chart)
+%sh
+libreoffice --headless --convert-to pdf --outdir /tmp/pdf_out /path/to/your_deck.pptx
 ```
+This reliably produces a single multi-page PDF, one page per slide — avoids the "only exports first slide" issue you'd hit with direct PNG export.
 
-For your slide, this would give you something like:
+### 3. Rasterize the target slide page and crop to the chart's EMU bounding box
+
 ```python
-{
-  "categories": ["home", "search", "movies", "my_stuff_nav", "sports", "tv_shows"],
-  "series": [
-    {"name": "control", "values": [69.03, 4.06, 1.82, 1.57, 1.53, 0.63]},
-    {"name": "variation_1", "values": [69.19, 4.09, 1.80, 1.55, 1.53, 0.62]}
-  ]
-}
+%pip install pymupdf --quiet
 ```
 
-**One catch:** the `%` deltas (0.2%, 0.7%, -0.8%, -1.4%, 0.3%, -0.9%) sitting above each bar pair are almost certainly **separate text box shapes** manually placed on the slide, not part of the chart object itself — PowerPoint charts don't natively render custom "% change" annotations like that between series. You'll want to grab those the same way you handled "Control"/"Variant" labels earlier — loop over `shape.has_text_frame` shapes and geometrically match each label to the category it sits above (using `shape.left`/`shape.top` bounds), the same `link_labels_to_images`-style logic, just matched against chart plot-area x-positions instead of picture shapes this time.
-
-## 2. Saving the chart as an image
-
-This is trickier — python-pptx **cannot rasterize/render** a chart to an image; it only reads/writes the underlying XML data, there's no rendering engine built in. Your options:
-
-**Option A — Render the whole slide, then crop (most reliable in Databricks/Linux)**
-Use LibreOffice headless to convert the slide to an image, then crop to the chart's bounding box:
 ```python
-import subprocess
+import fitz  # PyMuPDF
+from PIL import Image
+from pptx import Presentation
+from pptx.util import Emu
 
-subprocess.run([
-    "libreoffice", "--headless", "--convert-to", "png",
-    "--outdir", "/tmp/slide_images", local_file_path
-])
+def crop_chart_from_slide(pptx_path, pdf_path, slide_index, chart_shape, dpi=200, out_path="chart.png"):
+    """
+    slide_index: 0-based index of the slide in the deck
+    chart_shape: the python-pptx shape object for the chart (shape.has_chart == True)
+    """
+    prs = Presentation(pptx_path)
+    slide_width_emu = prs.slide_width
+    slide_height_emu = prs.slide_height
+
+    # Render just this page at target DPI
+    doc = fitz.open(pdf_path)
+    page = doc[slide_index]
+    pix = page.get_pixmap(dpi=dpi)
+    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+
+    # Map EMU bbox -> pixel bbox using slide-wide EMU->pixel ratio
+    px_per_emu_x = pix.width / slide_width_emu
+    px_per_emu_y = pix.height / slide_height_emu
+
+    left   = chart_shape.left   * px_per_emu_x
+    top    = chart_shape.top    * px_per_emu_y
+    right  = (chart_shape.left + chart_shape.width)  * px_per_emu_x
+    bottom = (chart_shape.top  + chart_shape.height) * px_per_emu_y
+
+    cropped = img.crop((left, top, right, bottom))
+    cropped.save(out_path)
+    return out_path
 ```
-This rasterizes the *whole slide* as PNG (LibreOffice typically only exports the first slide per file by default — you may need to split the deck to one-slide-per-file first, or use `--convert-to png:impress_png_Export` with page range options). Then crop using the chart shape's EMU bounding box converted to pixels based on the output image's DPI.
 
-**Option B — PowerPoint COM automation (Windows only, not viable in Databricks)**
-If you had a Windows machine with PowerPoint installed, `win32com` could screenshot a shape directly. Not usable in your Databricks/Linux environment, so skip this for your pipeline.
+Usage — find the chart shape the same way you did with `has_chart` earlier, then pass it in:
 
-**Option C — Reconstruct the chart yourself from extracted data (recommended for your pipeline)**
-Since you already have clean structured data from `extract_chart_data()` above, honestly the more robust move for your knowledge-assist pipeline is to **re-plot it yourself** with matplotlib rather than trying to rasterize PowerPoint's native rendering:
 ```python
-import matplotlib.pyplot as plt
+from pptx import Presentation
 
-def plot_chart_from_data(chart_info):
-    categories = chart_info["categories"]
-    fig, ax = plt.subplots(figsize=(10, 5))
-    width = 0.35
-    x = range(len(categories))
+prs = Presentation("/path/to/your_deck.pptx")
+slide = prs.slides[3]  # whichever slide has the chart
 
-    for i, series in enumerate(chart_info["series"]):
-        offset = [xi + i * width for xi in x]
-        ax.bar(offset, series["values"], width=width, label=series["name"])
+chart_shape = next(s for s in slide.shapes if s.has_chart)
 
-    ax.set_xticks([xi + width / 2 for xi in x])
-    ax.set_xticklabels(categories)
-    ax.legend()
-    plt.title("Watchtime by Page")
-    plt.show()
-
-plot_chart_from_data(result[0])
+crop_chart_from_slide(
+    pptx_path="/path/to/your_deck.pptx",
+    pdf_path="/tmp/pdf_out/your_deck.pdf",
+    slide_index=3,
+    chart_shape=chart_shape,
+    out_path="/tmp/chart_crop.png"
+)
 ```
 
-Given that your goal is feeding this into a knowledge-assist/RAG pipeline, I'd lean toward **Option C + the raw structured data** rather than chasing pixel-perfect image extraction — an LLM (or your downstream agent) will get far more value from `{"category": "home", "control": 69.03, "variation_1": 69.19, "delta_pct": 0.2}` as structured JSON than from an image it has to OCR/interpret again anyway.
+### Notes specific to your pipeline
+
+- **Fidelity**: This gives you the actual rendered chart pixels — including the manually-placed % delta text boxes sitting above the bars — since it's a real render of the slide, not a matplotlib reconstruction. You get the best of both: image for visual/OCR-fallback use, plus the structured `extract_chart_data()` output for exact numbers.
+- **DPI**: 200 is a reasonable default for legibility; bump to 300 if downstream OCR or an LLM vision step will read text off it.
+- **Bounding box padding**: LibreOffice's render of a chart can have a few pixels of internal padding versus the raw EMU frame — if the crop looks slightly tight, pad by ~5–10px on each side.
+- **Batch case**: since you're doing this across a full corpus of NBCU decks, do the `--convert-to pdf` step once per file up front (batch job), then loop over `(pptx_path, pdf_path, slide_index, chart_shape)` tuples for the crop step — no need to re-invoke LibreOffice per chart.
